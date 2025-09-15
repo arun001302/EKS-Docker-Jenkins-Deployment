@@ -195,7 +195,7 @@ sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 ## 6) Repository Layout (GitHub)
 
-Create or use a repo named **`EKS-Docker-Jenkins-Deployment`** with the following files at the **repo root**:
+Create or use this repo with the following files at the **repo root**:
 
 ```
 .
