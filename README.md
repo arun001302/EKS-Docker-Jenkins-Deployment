@@ -323,7 +323,7 @@ pipeline {
 
   environment {
     AWS_REGION = 'us-east-2'
-    CLUSTER    = 'eks-demo3'
+    CLUSTER    = 'eks-demo4'
     APP_NAME   = 'hello-web'
   }
 
