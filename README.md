@@ -84,10 +84,15 @@ tar -xzf eksctl_$(uname -s)_amd64.tar.gz -C /tmp
 sudo mv /tmp/eksctl /usr/local/bin/
 
 # kubectl (match EKS 1.29)
-curl -sLO "https://amazon-eks.s3.us-east-2.amazonaws.com/1.29.0/2024-08-08/bin/linux/amd64/kubectl"
-chmod +x kubectl
-sudo mv kubectl /usr/local/bin/kubectl
-sudo chown root:root /usr/local/bin/kubectl
+sudo rm -f /etc/apt/sources.list.d/kubernetes.list
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /" \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list >/dev/null
+sudo apt update
+sudo apt -y install kubectl
+kubectl version --client
 
 # Verify
 aws --version
