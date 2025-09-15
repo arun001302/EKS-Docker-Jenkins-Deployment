@@ -4,8 +4,25 @@ pipeline {
 
   stages {
     stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Ensure env file') {
       steps {
-        checkout scm
+        sh '''
+          set -eu
+          # Create .env.aws if it’s missing (safety net)
+          if [ ! -f ./.env.aws ]; then
+            cat > ./.env.aws <<EOF
+AWS_REGION=us-east-2
+CLUSTER=eks-demo3
+APP_NAME=hello-web
+EOF
+            echo "Created fallback .env.aws (commit this file to your repo to keep it permanent)."
+          fi
+          echo "---- .env.aws ----"
+          cat ./.env.aws
+        '''
       }
     }
 
@@ -31,11 +48,8 @@ pipeline {
           set -eu
           . ./.env.aws
           docker build -t ${APP_NAME}:1 .
-          # quick smoke test
           docker run -d --rm --name smoke -p 3000:3000 ${APP_NAME}:1
-          for i in $(seq 1 10); do
-            curl -sf http://localhost:3000/ && break || sleep 1
-          done
+          for i in $(seq 1 10); do curl -sf http://localhost:3000/ && break || sleep 1; done
           curl -sf http://localhost:3000/ | head -n 1
           docker rm -f smoke
         '''
@@ -62,8 +76,6 @@ pipeline {
         sh '''
           set -eu
           . ./.env.aws
-          which kubectl
-          kubectl version --client
           aws eks update-kubeconfig --name "${CLUSTER}" --region "${AWS_REGION}"
           kubectl get nodes -o wide
         '''
@@ -78,17 +90,12 @@ pipeline {
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
 
-          # Ensure namespace exists; then apply manifests
           kubectl get ns demo >/dev/null 2>&1 || kubectl create ns demo
           kubectl apply -f namespace.yaml
           kubectl apply -f deployment.yaml
           kubectl apply -f service.yaml
 
-          # Use the latest tag we just pushed (1) or 'latest'
-          TAG=1
-          kubectl -n demo set image deployment/${APP_NAME} ${APP_NAME}="${ECR_URI}:${TAG}"
-
-          # Wait for rollout and print Service endpoint
+          kubectl -n demo set image deployment/${APP_NAME} ${APP_NAME}="${ECR_URI}:1"
           kubectl -n demo rollout status deployment/${APP_NAME} --timeout=180s
           kubectl -n demo get deploy,rs,pods -o wide
           kubectl -n demo get svc ${APP_NAME} -o wide
@@ -100,8 +107,6 @@ pipeline {
   }
 
   post {
-    always {
-      sh 'docker image prune -f || true'
-    }
+    always { sh 'docker image prune -f || true' }
   }
 }
