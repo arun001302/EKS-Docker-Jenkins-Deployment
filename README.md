@@ -1,6 +1,6 @@
 # EKS + Docker + Jenkins CI/CD (my notes, step-by-step)
 
-This is the exact path I followed to get a tiny Node.js app building in **Jenkins**, pushed to **ECR**, and deployed on **EKS**. It’s copy‑paste friendly, and I’ve captured the little fixes we made along the way so future‑me (or you!) doesn’t trip on the same stuff.
+This is the exact path I followed to get a tiny Node.js app building in **Jenkins**, pushed to **ECR**, and deployed on **EKS**. It’s copy‑paste friendly. 
 
 > **My setup**
 > - **Region:** `us-east-2` (Ohio)
