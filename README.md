@@ -154,7 +154,7 @@ kubectl get nodes -o wide
 
 ## Step 5: Project Files
 
-The GitHub repository should contain:
+The GitHub repository contains:
 
 - **Dockerfile** – Defines how the Node.js app is containerized.  
 - **server.js** – Node.js web server.  
