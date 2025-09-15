@@ -28,7 +28,7 @@ This document will provide instructions  on building a tiny Node.js app in Jenki
 
 ---
 
-## Quick “why these services?” (one‑liners)
+## Service Used Breakdown 
 
 - **EC2** – VMs for my **Workbench** (ops box) and **Jenkins** server.
 - **EKS** – managed Kubernetes control plane so I’m not running my own masters.
