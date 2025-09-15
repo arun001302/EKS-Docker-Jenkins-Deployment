@@ -15,7 +15,7 @@ pipeline {
           if [ ! -f ./.env.aws ]; then
             cat > ./.env.aws <<EOF
 AWS_REGION=us-east-2
-CLUSTER=eks-demo3
+CLUSTER=eks-demo4
 APP_NAME=hello-web
 EOF
             echo "Created fallback .env.aws (commit this file to your repo to keep it permanent)."
