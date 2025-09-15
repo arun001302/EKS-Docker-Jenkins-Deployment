@@ -1,71 +1,107 @@
 pipeline {
   agent any
-  environment {
-    PATH       = "/usr/bin:/usr/local/bin:/usr/sbin:/usr/bin:/bin"
-    AWS_REGION = 'us-east-2'
-    APP_NAME   = 'hello-web'
-    CLUSTER    = 'eks-demo2'
-    IMAGE_TAG  = "${env.BUILD_NUMBER}"
-  }
   options { timestamps() }
+
   stages {
-    stage('Checkout'){ steps{ checkout scm } }
-    stage('Discover AWS & Login to ECR'){
-      steps{ sh '''
-        set -eu
-        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-        printf "export ACCOUNT_ID=%s\nexport ECR_URI=%s.dkr.ecr.%s.amazonaws.com/%s\n"           "$ACCOUNT_ID" "$ACCOUNT_ID" "$AWS_REGION" "$APP_NAME" > .env.aws
-        aws ecr describe-repositories --repository-names "${APP_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1 ||           aws ecr create-repository --repository-name "${APP_NAME}" --region "${AWS_REGION}"
-        aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin           "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-      ''' }
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
     }
-    stage('Build & Smoke Test'){
-      steps{ sh '''
-        set -eu
-        . ./.env.aws
-        docker build -t "${APP_NAME}:${IMAGE_TAG}" .
-        docker run -d --rm --name smoke -p 3000:3000 "${APP_NAME}:${IMAGE_TAG}"
-        for i in $(seq 1 10); do curl -sf http://localhost:3000/ >/dev/null && break || sleep 1; done
-        curl -sf http://localhost:3000/ | head -n 1
-        docker rm -f smoke
-      ''' }
+
+    stage('Discover AWS & Login to ECR') {
+      steps {
+        sh '''
+          set -eu
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "export ACCOUNT_ID=${ACCOUNT_ID}"
+          echo "export ECR_URI=${ACCOUNT_ID}.dkr.ecr.us-east-2.amazonaws.com/hello-web"
+          aws ecr describe-repositories --repository-names hello-web --region us-east-2 || \
+            aws ecr create-repository --repository-name hello-web \
+              --image-scanning-configuration scanOnPush=true --region us-east-2
+          aws ecr get-login-password --region us-east-2 | \
+            docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.us-east-2.amazonaws.com
+        '''
+      }
     }
-    stage('Tag & Push to ECR'){
-      steps{ sh '''
-        set -eu
-        . ./.env.aws
-        docker tag "${APP_NAME}:${IMAGE_TAG}" "${ECR_URI}:${IMAGE_TAG}"
-        docker tag "${APP_NAME}:${IMAGE_TAG}" "${ECR_URI}:latest"
-        docker push "${ECR_URI}:${IMAGE_TAG}"
-        docker push "${ECR_URI}:latest"
-      ''' }
+
+    stage('Build & Smoke Test') {
+      steps {
+        sh '''
+          set -eu
+          . ./.env.aws
+          docker build -t ${APP_NAME}:1 .
+          # quick smoke test
+          docker run -d --rm --name smoke -p 3000:3000 ${APP_NAME}:1
+          for i in $(seq 1 10); do
+            curl -sf http://localhost:3000/ && break || sleep 1
+          done
+          curl -sf http://localhost:3000/ | head -n 1
+          docker rm -f smoke
+        '''
+      }
     }
-    stage('Configure kubectl for EKS'){
-      steps{ sh '''
-        set -eu
-        which kubectl
-        kubectl version --client
-        aws eks update-kubeconfig --name "${CLUSTER}" --region "${AWS_REGION}"
-        kubectl get nodes
-      ''' }
+
+    stage('Tag & Push to ECR') {
+      steps {
+        sh '''
+          set -eu
+          . ./.env.aws
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
+          docker tag ${APP_NAME}:1 ${ECR_URI}:1
+          docker tag ${APP_NAME}:1 ${ECR_URI}:latest
+          docker push ${ECR_URI}:1
+          docker push ${ECR_URI}:latest
+        '''
+      }
     }
-    stage('Deploy to EKS'){
-      steps{ sh '''
-        set -eu
-        . ./.env.aws
-        kubectl apply -f namespace.yaml
-        kubectl apply -f deployment.yaml
-        kubectl apply -f service.yaml
-        kubectl -n demo set image deployment/hello-web hello-web="${ECR_URI}:${IMAGE_TAG}" --record=true
-        kubectl -n demo rollout status deployment/hello-web --timeout=180s
-        for i in $(seq 1 30); do
-          H=$(kubectl -n demo get svc hello-web -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-          if [ -n "$H" ]; then echo "App URL: http://$H/"; curl -sf "http://$H/" | head -n 1 || true; exit 0; fi
-          sleep 10
-        done
-        echo "Service created; ELB not ready yet. Check later: kubectl -n demo get svc hello-web"
-      ''' }
+
+    stage('Configure kubectl for EKS') {
+      steps {
+        sh '''
+          set -eu
+          . ./.env.aws
+          which kubectl
+          kubectl version --client
+          aws eks update-kubeconfig --name "${CLUSTER}" --region "${AWS_REGION}"
+          kubectl get nodes -o wide
+        '''
+      }
+    }
+
+    stage('Deploy to EKS') {
+      steps {
+        sh '''
+          set -eu
+          . ./.env.aws
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
+
+          # Ensure namespace exists; then apply manifests
+          kubectl get ns demo >/dev/null 2>&1 || kubectl create ns demo
+          kubectl apply -f namespace.yaml
+          kubectl apply -f deployment.yaml
+          kubectl apply -f service.yaml
+
+          # Use the latest tag we just pushed (1) or 'latest'
+          TAG=1
+          kubectl -n demo set image deployment/${APP_NAME} ${APP_NAME}="${ECR_URI}:${TAG}"
+
+          # Wait for rollout and print Service endpoint
+          kubectl -n demo rollout status deployment/${APP_NAME} --timeout=180s
+          kubectl -n demo get deploy,rs,pods -o wide
+          kubectl -n demo get svc ${APP_NAME} -o wide
+          ELB=$(kubectl -n demo get svc ${APP_NAME} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "APP URL: http://${ELB}/"
+        '''
+      }
     }
   }
-  post { always { sh 'docker image prune -f || true' } }
+
+  post {
+    always {
+      sh 'docker image prune -f || true'
+    }
+  }
 }
