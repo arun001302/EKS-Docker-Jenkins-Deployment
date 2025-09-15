@@ -170,10 +170,10 @@ unzip -q awscliv2.zip
 sudo ./aws/install
 
 # kubectl (client for 1.29, amd64)
-curl -sLO "https://amazon-eks.s3.us-east-2.amazonaws.com/1.29.0/2024-08-08/bin/linux/amd64/kubectl"
-chmod +x kubectl
-sudo mv kubectl /usr/local/bin/kubectl
-sudo chown root:root /usr/local/bin/kubectl
+curl -LO "https://dl.k8s.io/release/v1.29.15/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+rm kubectl
+kubectl version --client
 
 # Give Jenkins access to Docker
 sudo usermod -aG docker jenkins
