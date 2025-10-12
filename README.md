@@ -186,7 +186,7 @@ sudo -iu jenkins bash -lc 'docker ps || id'
 Retrieve the initial admin password and open the UI:
 
 ```bash
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+sudo cat /[REDACTED_SECRET]
 # Browse to: http://<JENKINS_PUBLIC_IP>:8080
 # Complete the setup wizard (Suggested plugins are fine).
 ```
@@ -290,7 +290,7 @@ spec:
 ```
 
 > Replace `<ECR_URI>` with your value, for example:
-> `914261932225.dkr.ecr.us-east-2.amazonaws.com/hello-web`
+> `[REDACTED_ACCOUNT_ID].dkr.ecr.us-east-2.amazonaws.com/hello-web`
 
 ### 6.6 service.yaml
 ```yaml
@@ -310,10 +310,10 @@ spec:
 
 ### 6.7 .env.aws
 ```bash
-ACCOUNT_ID=914261932225
+ACCOUNT_ID=[REDACTED_ACCOUNT_ID]
 AWS_REGION=us-east-2
 APP_NAME=hello-web
-ECR_URI=914261932225.dkr.ecr.us-east-2.amazonaws.com/hello-web
+ECR_URI=[REDACTED_ACCOUNT_ID].dkr.ecr.us-east-2.amazonaws.com/hello-web
 ```
 
 ### 6.8 Jenkinsfile
